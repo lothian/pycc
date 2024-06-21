@@ -261,14 +261,14 @@ class ccresponse(object):
         B = B.upper()
 
         # dictionaries for perturbed wave functions
-        X1 = {}
-        X2 = {}
+        self.X1 = {}
+        self.X2 = {}
         for axis in range(3):
             # A(-w) or A(0)
             pertkey = A + "_" + self.cart[axis]
             X_key = pertkey + "_" + f"{-omega:0.6f}"
             print("Solving right-hand perturbed wave function for %s:" % (X_key))
-            X1[X_key], X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
+            self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
 
             # A(w) or A*(w) 
             if (omega != 0.0):
@@ -276,7 +276,7 @@ class ccresponse(object):
                     pertkey = A + "*_" + self.cart[axis]
                 X_key = pertkey + "_" + f"{omega:0.6f}"
                 print("Solving right-hand perturbed wave function for %s:" % (X_key))
-                X1[X_key], X2[X_key], polar = self.solve_right(self.pertbar[pertkey], omega, e_conv, r_conv, maxiter, max_diis, start_diis)
+                self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], omega, e_conv, r_conv, maxiter, max_diis, start_diis)
 
 
         if (B != A):
@@ -286,17 +286,42 @@ class ccresponse(object):
                 print("Solving right-hand perturbed wave function for %s:" % (X_key))
                 X_2[pertkey] = self.solve_right(self.pertbar[pertkey], omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                 check.append(polar)
-                X1[X_key], X2[X_key], polar = self.solve_right(self.pertbar[pertkey], omega, e_conv, r_conv, maxiter, max_diis, start_diis)
+                self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                 check.append(polar)
                 if (omega != 0.0):
                     X_key = pertkey + "_" + f"{-omega:0.6f}"
                     print("Solving right-hand perturbed wave function for %s:" % (X_key))
-                    X1[X_key], X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
+                    self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                     check.append(polar)
 
         for alpha in range(3):
+            pert_key = A + "_" + self.cart[alpha]
             for beta in range(3):
-                polar = 1.0
+                X_key = B + "_" + self.cart[beta] + "_" + f"{omega:0.6f}"
+                polar_LCX = self.LCX(pert_key, X_key)
+
+    def LCX(C, X, w):
+        contract = self.ccwfn.contract
+
+        Aov = self.Aov[pert_key]
+        Aoo = self.Aoo[pert_key]
+        Avv = self.Avv[pert_key]
+        X1 = self.X1[X_key]
+        X2 = self.X2[X_key]
+        l1 = self.cclambda.l1
+        l2 = self.cclambda.l2
+
+        polar = 2.0 * contract('ia,ia->', Aov, X1)
+
+        tmp = contract('ae,ie->ia', Avv, X1)
+        tmp -= contract('mi,ma->ia', Aoo, X1)
+        tmp += contract('me,imae->ia', Aov, 2*X2-X2.swapaxes(2,3))
+        polar += 2.0 * contract('ia,ia->', tmp, l1)
+
+        tmp = contract('be,ijae->ijab', Avv, X2)
+        tmp -= contract('mj,imab->ijab', Aoo, X2)
+        tmp += contract('abej,ie->ijab', Avvvo, X1)
+        tmp -= contract('mbij,ma->ijab', Aovoo, X1)
 
 
     def linresp_asym(self, pertkey_a, X1_B, X2_B, Y1_B, Y2_B):
