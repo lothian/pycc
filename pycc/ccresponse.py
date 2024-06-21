@@ -201,7 +201,6 @@ class ccresponse(object):
                     print("Solving right-hand perturbed wave function for %s:" % (X_key))
                     X1[X_key], X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                     check[X_key] = polar
-        
 
         return check
 
@@ -295,23 +294,26 @@ class ccresponse(object):
                     X1[X_key], X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                     check.append(polar)
 
+        for alpha in range(3):
+            for beta in range(3):
+                polar = 1.0
+
 
     def linresp_asym(self, pertkey_a, X1_B, X2_B, Y1_B, Y2_B):
         """
 	Calculate the CC linear response function for polarizability at field-frequency omega(w1).
 
 	The linear response function, <<A;B(w1)>> generally reuires the following perturbed wave functions and frequencies:
-	
+
 	Parameters
 	----------
 	pertkey_a: string
 		String identifying the one-electron perturbation, A along a cartesian axis
-	
 
 	Return
 	------
 	polar: float
-	     A value of the chosen linear response function corresponding to compute polariazabiltity in a specified cartesian diresction.
+        A value of the chosen linear response function corresponding to compute polariazabiltity in a specified cartesian diresction.
         """
 
         contract = self.ccwfn.contract
