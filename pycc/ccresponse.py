@@ -303,13 +303,16 @@ class ccresponse(object):
     def LCX(C, X, w):
         contract = self.ccwfn.contract
 
-        Aov = self.Aov[pert_key]
-        Aoo = self.Aoo[pert_key]
-        Avv = self.Avv[pert_key]
         X1 = self.X1[X_key]
         X2 = self.X2[X_key]
         l1 = self.cclambda.l1
         l2 = self.cclambda.l2
+
+        Aov = self.Aov[pert_key]
+        Aoo = self.Aoo[pert_key]
+        Avv = self.Avv[pert_key]
+        Avvvo = self.Avvvo[pert_key]
+        Aovoo = self.Aovoo[pert_key]
 
         polar = 2.0 * contract('ia,ia->', Aov, X1)
 
