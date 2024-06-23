@@ -294,37 +294,50 @@ class ccresponse(object):
                     self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                     check.append(polar)
 
+        polar = np.zeros((3,3))
         for alpha in range(3):
-            pert_key = A + "_" + self.cart[alpha]
-            for beta in range(3):
-                X_key = B + "_" + self.cart[beta] + "_" + f"{omega:0.6f}"
-                polar_LCX = self.LCX(pert_key, X_key)
+            pert_A_key = A + "_" + self.cart[alpha]
+            X_A_key = A + "_" + self.cart[alpha] + "_" + f"{-omega:0.6f}"
 
-    def LCX(C, X, w):
+            for beta in range(3):
+                pert_B_key = B + "_" + self.cart[beta]
+                X_B_key = B + "_" + self.cart[beta] + "_" + f"{omega:0.6f}"
+
+                polar[alpha][beta] = self.LCX(pert_A_key, X_B_key)
+                polar[alpha][beta] += self.LCX(pert_B_key, X_A_key)
+
+        print(-polar)
+
+    def LCX(self, C, X):
         contract = self.ccwfn.contract
 
-        X1 = self.X1[X_key]
-        X2 = self.X2[X_key]
+        X1 = self.X1[X]
+        X2 = self.X2[X]
         l1 = self.cclambda.l1
         l2 = self.cclambda.l2
 
-        Aov = self.Aov[pert_key]
-        Aoo = self.Aoo[pert_key]
-        Avv = self.Avv[pert_key]
-        Avvvo = self.Avvvo[pert_key]
-        Aovoo = self.Aovoo[pert_key]
+        pertbar = self.pertbar[C]
+
+        Aov = pertbar.Aov
+        Aoo = pertbar.Aoo
+        Avv = pertbar.Avv
+        Avvvo = pertbar.Avvvo
+        Aovoo = pertbar.Aovoo
 
         polar = 2.0 * contract('ia,ia->', Aov, X1)
 
         tmp = contract('ae,ie->ia', Avv, X1)
         tmp -= contract('mi,ma->ia', Aoo, X1)
         tmp += contract('me,imae->ia', Aov, 2*X2-X2.swapaxes(2,3))
-        polar += 2.0 * contract('ia,ia->', tmp, l1)
+        polar += contract('ia,ia->', tmp, l1)
 
-        tmp = contract('be,ijae->ijab', Avv, X2)
-        tmp -= contract('mj,imab->ijab', Aoo, X2)
+        tmp = contract('ae,ijeb->ijab', Avv, X2)
+        tmp -= contract('mi,mjab->ijab', Aoo, X2)
         tmp += contract('abej,ie->ijab', Avvvo, X1)
         tmp -= contract('mbij,ma->ijab', Aovoo, X1)
+        polar += contract('ijab,ijab->', tmp, l2)
+
+        return polar
 
 
     def linresp_asym(self, pertkey_a, X1_B, X2_B, Y1_B, Y2_B):
@@ -401,8 +414,8 @@ class ccresponse(object):
         Dijab = self.Dijab
 
         # initial guess
-        X1 = pertbar.Avo.T/(Dia + omega)
-        X2 = pertbar.Avvoo/(Dijab + omega)
+        X1 = pertbar.Avo.T.copy()/(Dia + omega)
+        X2 = pertbar.Avvoo.copy()/(Dijab + omega)
 
         pseudo = self.pseudoresponse(pertbar, X1, X2)
         print(f"Iter {0:3d}: CC Pseudoresponse = {pseudo.real:.15f} dP = {pseudo.real:.5E}")
@@ -410,36 +423,30 @@ class ccresponse(object):
         diis = helper_diis(X1, X2, max_diis)
         contract = self.ccwfn.contract
 
-        self.X1 = X1
-        self.X2 = X2
-
         for niter in range(1, maxiter+1):
             pseudo_last = pseudo
 
-            X1 = self.X1
-            X2 = self.X2
+            r1 = self.r_X1(X1, X2, pertbar, omega)
+            r2 = self.r_X2(X1, X2, pertbar, omega)
 
-            r1 = self.r_X1(pertbar, omega)
-            r2 = self.r_X2(pertbar, omega)
-
-            self.X1 += r1/(Dia + omega)
-            self.X2 += r2/(Dijab + omega)
+            X1 += r1.copy()/(Dia + omega)
+            X2 += r2.copy()/(Dijab + omega)
 
             rms = contract('ia,ia->', np.conj(r1/(Dia+omega)), r1/(Dia+omega))
             rms += contract('ijab,ijab->', np.conj(r2/(Dijab+omega)), r2/(Dijab+omega))
             rms = np.sqrt(rms)
 
-            pseudo = self.pseudoresponse(pertbar, self.X1, self.X2)
+            pseudo = self.pseudoresponse(pertbar, X1, X2)
             pseudodiff = np.abs(pseudo - pseudo_last)
             print(f"Iter {niter:3d}: CC Pseudoresponse = {pseudo.real:.15f} dP = {pseudodiff:.5E} rms = {rms.real:.5E}")
 
             if ((abs(pseudodiff) < e_conv) and abs(rms) < r_conv):
                 print("\nPerturbed wave function converged in %.3f seconds.\n" % (time.time() - solver_start))
-                return self.X1, self.X2, pseudo
+                return X1, X2, pseudo
 
-            diis.add_error_vector(self.X1, self.X2)
+            diis.add_error_vector(X1, X2)
             if niter >= start_diis:
-                self.X1, self.X2 = diis.extrapolate(self.X1, self.X2)
+                X1, X2 = diis.extrapolate(X1, X2)
 
     def solve_left(self, pertbar, omega, e_conv=1e-12, r_conv=1e-12, maxiter=200, max_diis=7, start_diis=1):
         """
@@ -506,12 +513,10 @@ class ccresponse(object):
             if niter >= start_diis:
                 self.Y1, self.Y2 = diis.extrapolate(self.Y1, self.Y2)
 
-    def r_X1(self, pertbar, omega):
+    def r_X1(self, X1, X2, pertbar, omega):
         contract = self.contract
         o = self.ccwfn.o
         v = self.ccwfn.v
-        X1 = self.X1
-        X2 = self.X2
         hbar = self.hbar
 
         r_X1 = (pertbar.Avo.T - omega * X1).copy()
@@ -525,12 +530,10 @@ class ccresponse(object):
 
         return r_X1
 
-    def r_X2(self, pertbar, omega):
+    def r_X2(self, X1, X2, pertbar, omega):
         contract = self.contract
         o = self.ccwfn.o
         v = self.ccwfn.v
-        X1 = self.X1
-        X2 = self.X2
         t2 = self.ccwfn.t2
         hbar = self.hbar
         L = self.H.L
@@ -541,7 +544,7 @@ class ccresponse(object):
         Zoo = -1.0*contract('mnie,ne->mi', (2.0*hbar.Hooov - hbar.Hooov.swapaxes(0,1)), X1)
         Zoo -= contract('mnef,inef->mi', L[o,o,v,v], X2)
 
-        r_X2 = pertbar.Avvoo - 0.5 * omega*X2
+        r_X2 = (pertbar.Avvoo - 0.5 * omega*X2).copy()
         r_X2 += contract('ie,abej->ijab', X1, hbar.Hvvvo)
         r_X2 -= contract('ma,mbij->ijab', X1, hbar.Hovoo)
         r_X2 += contract('mi,mjab->ijab', Zoo, t2)
