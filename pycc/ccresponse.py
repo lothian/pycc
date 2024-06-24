@@ -882,13 +882,16 @@ class pertbar(object):
         Avvvo = pertbar.Avvvo
         Aovoo = pertbar.Aovoo
 
+        # <0|[mubar, X1]|0>
         polar = 2.0 * contract('ia,ia->', Aov, X1)
 
+        # <0|L1 [mubar, X1+X2]|0>
         tmp = contract('ae,ie->ia', Avv, X1)
         tmp -= contract('mi,ma->ia', Aoo, X1)
         tmp += contract('me,imae->ia', Aov, 2*X2-X2.swapaxes(2,3))
         polar += contract('ia,ia->', tmp, l1)
 
+        # <0|L2 [mubar, X1+X2]|0>
         tmp = contract('ae,ijeb->ijab', Avv, X2)
         tmp -= contract('mi,mjab->ijab', Aoo, X2)
         tmp += contract('abej,ie->ijab', Avvvo, X1)
@@ -898,6 +901,8 @@ class pertbar(object):
         return polar
 
     def HXY(self, X, Y):
+
+        contract = self.ccwfn.contract
 
         o = self.ccwfn.o
         v = self.ccwfn.v
@@ -909,27 +914,21 @@ class pertbar(object):
         l1 = self.cclambda.l1
         l2 = self.cclambda.l2
 
-        Hov = hbar.build_Hov(o, v, F, L, t1)
-        Hvv = hbar.build_Hvv(o, v, F, L, t1, t2)
-        Hoo = hbar.build_Hoo(o, v, F, L, t1, t2)
-        Hoooo = hbar.build_Hoooo(o, v, ERI, t1, t2)
-        Hvvvv = hbar.build_Hvvvv(o, v, ERI, t1, t2)
-        Hvovv = hbar.build_Hvovv(o, v, ERI, t1)
-        Hooov = hbar.build_Hooov(o, v, ERI, t1)
-        Hovvo = hbar.build_Hovvo(o, v, ERI, L, t1, t2)
-        Hovov = hbar.build_Hovov(o, v, ERI, t1, t2)
-        Hvvvo = hbar.build_Hvvvo(o, v, ERI, L, Hov, Hvvvv, t1, t2)
-        Hovoo = hbar.build_Hovoo(o, v, ERI, L, Hov, Hoooo, t1, t2)
+        Hoooo = hbar.Hoooo
+        Hvvvv = hbar.Hvvvv
+        Hvovv = hbar.Hvovv
+        Hooov = hbar.Hooov
 
-        Goo = self.build_Goo(t2, l2)
-        Gvv = self.build_Gvv(t2, l2)
+        Goo = contract('mjab,ijab->mi', t2, l2)
+        Gvv = -1.0 * contract('ijeb,ijab->ae', t2, l2)
 
         r_l2 = L[o,o,v,v].copy()
-        r_l2 += 0.5 * contract('mnab,ijmn->ijab', l2, Hoooo)
-        r_l2 += 0.5 * contract('ijef,efab->ijab', l2, Hvvvv)
+        r_l2 += 0.5 * contract('mnab,ijmn->ijab', l2, .Hoooo)
+        r_l2 += 0.5 * contract('ijef,efab->ijab', l2, .Hvvvv)
         r_l2 += contract('ae,ijeb->ijab', Gvv, L[o,o,v,v])
         r_l2 -= contract('mi,mjab->ijab', Goo, L[o,o,v,v])
         r_l2 += 2.0 * contract('ie,ejab->ijab', l1, 2.0*Hvovv-Hvovv.swapaxes(2,3))
         r_l2 -= 2.0 * contract('mb,jima->ijab', l1, 2.0*Hooov-Hooov.swapaxes(0,1))
 
+        r_l2 = r_l2 + r_l2.swapaxes(0,1).swapaxes(2,3)
 
