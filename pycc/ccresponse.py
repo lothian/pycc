@@ -266,12 +266,15 @@ class ccresponse(object):
         for axis in range(3):
             # A(-w) or A(0)
             pertkey = A + "_" + self.cart[axis]
-            X_key = pertkey + "_" + f"{-omega:0.6f}"
+            if omega == 0.0:
+                X_key = pertkey + "_" + f"{omega:0.6f}"
+            else:
+                X_key = pertkey + "_" + f"{-omega:0.6f}"
             print("Solving right-hand perturbed wave function for %s:" % (X_key))
             self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
 
             # A(w) or A*(w) 
-            if (omega != 0.0):
+            if omega != 0.0:
                 if (np.iscomplexobj(self.pertbar[pertkey].Aoo)):
                     pertkey = A + "*_" + self.cart[axis]
                 X_key = pertkey + "_" + f"{omega:0.6f}"
@@ -288,26 +291,57 @@ class ccresponse(object):
                 check.append(polar)
                 self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                 check.append(polar)
-                if (omega != 0.0):
+                if omega != 0.0:
                     X_key = pertkey + "_" + f"{-omega:0.6f}"
                     print("Solving right-hand perturbed wave function for %s:" % (X_key))
                     self.X1[X_key], self.X2[X_key], polar = self.solve_right(self.pertbar[pertkey], -omega, e_conv, r_conv, maxiter, max_diis, start_diis)
                     check.append(polar)
 
         polar = np.zeros((3,3))
+        polar_L = np.zeros((3,3))
+        polar_vovv = np.zeros((3,3))
+        polar_ooov = np.zeros((3,3))
+        polar_vvvv = np.zeros((3,3))
+        polar_oooo = np.zeros((3,3))
+        polar_Gvv = np.zeros((3,3))
+        polar_Goo = np.zeros((3,3))
+        polar_Hov = np.zeros((3,3))
+        polar_ovov = np.zeros((3,3))
+        polar_ovvo = np.zeros((3,3))
         for alpha in range(3):
             pert_A_key = A + "_" + self.cart[alpha]
-            X_A_key = A + "_" + self.cart[alpha] + "_" + f"{-omega:0.6f}"
+            if omega == 0.0:
+                X_A_key = A + "_" + self.cart[alpha] + "_" + f"{omega:0.6f}"
+            else:
+                X_A_key = A + "_" + self.cart[alpha] + "_" + f"{-omega:0.6f}"
 
             for beta in range(3):
                 pert_B_key = B + "_" + self.cart[beta]
                 X_B_key = B + "_" + self.cart[beta] + "_" + f"{omega:0.6f}"
 
-                polar[alpha][beta] = self.LCX(pert_A_key, X_B_key)
-                polar[alpha][beta] += self.LCX(pert_B_key, X_A_key)
+#                polar[alpha][beta] = self.LCX(pert_A_key, X_B_key)
+#                polar[alpha][beta] += self.LCX(pert_B_key, X_A_key)
 
-        print(-polar)
+                #polar[alpha][beta] = self.LHX1Y1(X_A_key, X_B_key)
+                polar_L[alpha][beta], polar_vovv[alpha][beta], polar_ooov[alpha][beta], polar_vvvv[alpha][beta], polar_oooo[alpha][beta], polar_Gvv[alpha][beta], polar_Goo[alpha][beta], polar_Hov[alpha][beta], polar_ovov[alpha][beta], polar_ovvo[alpha][beta] = self.LHX1Y1(X_A_key, X_B_key)
 
+#                polar[alpha][beta] += self.LHX1Y2(X_A_key, X_B_key)
+#                polar[alpha][beta] += self.LHX1Y2(X_B_key, X_A_key)
+
+        print("polar L:\n", polar_L)
+        print("\npolar Hvovv:\n", polar_vovv)
+        print("\npolar Hooov:\n", polar_ooov)
+        print("\npolar Hvvvv:\n", polar_vvvv)
+        print("\npolar Hoooo:\n", polar_oooo)
+        print("\npolar Goo:\n", polar_Goo)
+        print("\npolar Gvv:\n", polar_Gvv)
+        print("\npolar Hov:\n", polar_Hov)
+        print("\npolar Hovov:\n", polar_ovov)
+        print("\npolar Hovvo:\n", polar_ovvo)
+
+        polar = polar_L + polar_vovv + polar_ooov + polar_vvvv + polar_oooo + polar_Gvv + polar_Goo + polar_Hov + polar_ovov + polar_ovvo
+
+        print("\npolar LHX1Y1:\n", polar)
 
     def linresp_asym(self, pertkey_a, X1_B, X2_B, Y1_B, Y2_B):
         """
@@ -831,38 +865,6 @@ class ccresponse(object):
 
         return -2.0*(polar1 + polar2) 
         
-class pertbar(object):
-    def __init__(self, pert, ccwfn):
-        o = ccwfn.o
-        v = ccwfn.v
-        t1 = ccwfn.t1
-        t2 = ccwfn.t2
-        contract = ccwfn.contract
-
-        self.Aov = pert[o,v].copy()
-
-        self.Aoo = pert[o,o].copy()
-        self.Aoo += contract('ie,me->mi', t1, pert[o,v])
-
-        self.Avv = pert[v,v].copy()
-        self.Avv -= contract('ma,me->ae', t1, pert[o,v])
-
-        self.Avo = pert[v,o].copy()
-        self.Avo += contract('ie,ae->ai', t1, pert[v,v])
-        self.Avo -= contract('ma,mi->ai', t1, pert[o,o])
-        self.Avo += contract('miea,me->ai', (2.0*t2 - t2.swapaxes(2,3)), pert[o,v])
-        self.Avo -= contract('ie,ma,me->ai', t1, t1, pert[o,v])
-
-        self.Aovoo = contract('ijeb,me->mbij', t2, pert[o,v])
-
-        self.Avvvo = -1.0*contract('miab,me->abei', t2, pert[o,v])
-
-        # Note that Avvoo is permutationally symmetric, unlike the implementation in ugacc
-        self.Avvoo = contract('ijeb,ae->ijab', t2, self.Avv)
-        self.Avvoo -= contract('mjab,mi->ijab', t2, self.Aoo)
-        self.Avvoo = 0.5*(self.Avvoo + self.Avvoo.swapaxes(0,1).swapaxes(2,3))
-
-
     def LCX(self, C, X):
         """
         """
@@ -900,7 +902,69 @@ class pertbar(object):
 
         return polar
 
-    def HXY(self, X, Y):
+    def LHX1Y1(self, X, Y):
+        
+        contract = self.ccwfn.contract
+        
+        o = self.ccwfn.o
+        v = self.ccwfn.v
+        L = self.ccwfn.H.L
+        hbar = self.hbar
+
+        t1 = self.ccwfn.t1
+        t2 = self.ccwfn.t2
+        l1 = self.cclambda.l1
+        l2 = self.cclambda.l2
+        
+        Hov = hbar.Hov
+        Hoooo = hbar.Hoooo
+        Hvvvv = hbar.Hvvvv
+        Hvovv = hbar.Hvovv
+        Hooov = hbar.Hooov
+        Hovov = hbar.Hovov
+        Hovvo = hbar.Hovvo
+        
+        Goo = contract('mjab,ijab->mi', t2, l2)
+        Gvv = -1.0 * contract('ijeb,ijab->ae', t2, l2)
+        
+        r2_L = L[o,o,v,v].copy()
+        r2_vovv = contract('ejab,ie->ijab', 2.0*Hvovv-Hvovv.swapaxes(2,3), l1)
+        r2_ooov = -1.0*contract('jima,mb->ijab', 2.0*Hooov-Hooov.swapaxes(0,1), l1)
+        r2_vvvv = 0.5 * contract('efab,ijef->ijab', Hvvvv, l2)
+        r2_oooo = 0.5 * contract('ijmn,mnab->ijab', Hoooo, l2)
+        r2_Gvv = contract('ae,ijeb->ijab', Gvv, L[o,o,v,v])
+        r2_Goo = -1.0*contract('mi,mjab->ijab', Goo, L[o,o,v,v])
+        r2_Hov = -1.0*contract('ja,ib->ijab', Hov, l1)
+        r2_ovov = -1.0*contract('jema,mibe->ijab', Hovov, l2)
+        r2_ovvo = -1.0*contract('jeam,mieb->ijab', Hovvo, l2)
+        
+        r2_L = r2_L + r2_L.swapaxes(0,1).swapaxes(2,3)
+        r2_vovv = r2_vovv + r2_vovv.swapaxes(0,1).swapaxes(2,3)
+        r2_ooov = r2_ooov + r2_ooov.swapaxes(0,1).swapaxes(2,3)
+        r2_vvvv = r2_vvvv + r2_vvvv.swapaxes(0,1).swapaxes(2,3)
+        r2_oooo = r2_oooo + r2_oooo.swapaxes(0,1).swapaxes(2,3)
+        r2_Gvv = r2_Gvv + r2_Gvv.swapaxes(0,1).swapaxes(2,3)
+        r2_Goo = r2_Goo + r2_Goo.swapaxes(0,1).swapaxes(2,3)
+        r2_Hov = r2_Hov + r2_Hov.swapaxes(0,1).swapaxes(2,3)
+        r2_ovov = r2_ovov + r2_ovov.swapaxes(0,1).swapaxes(2,3)
+        r2_ovvo = r2_ovvo + r2_ovvo.swapaxes(0,1).swapaxes(2,3)
+        
+        X1 = self.X1[X]
+        Y1 = self.X1[Y]
+        polar_L = contract('ijab,ia,jb', r2_L, X1, Y1)
+        polar_vovv = contract('ijab,ia,jb', r2_vovv, X1, Y1)
+        polar_ooov = contract('ijab,ia,jb', r2_ooov, X1, Y1)
+        polar_vvvv = contract('ijab,ia,jb', r2_vvvv, X1, Y1)
+        polar_oooo = contract('ijab,ia,jb', r2_oooo, X1, Y1)
+        polar_Gvv = contract('ijab,ia,jb', r2_Gvv, X1, Y1)
+        polar_Goo = contract('ijab,ia,jb', r2_Goo, X1, Y1)
+        polar_Hov = contract('ijab,ia,jb', r2_Hov, X1, Y1)
+        polar_ovov = contract('ijab,ia,jb', r2_ovov, X1, Y1)
+        polar_ovvo = contract('ijab,ia,jb', r2_ovvo, X1, Y1)
+
+        return polar_L, polar_vovv, polar_ooov, polar_vvvv, polar_oooo, polar_Gvv, polar_Goo, polar_Hov, polar_ovov, polar_ovvo
+
+    def LHX1Y2(self, X, Y):
 
         contract = self.ccwfn.contract
 
@@ -914,21 +978,52 @@ class pertbar(object):
         l1 = self.cclambda.l1
         l2 = self.cclambda.l2
 
-        Hoooo = hbar.Hoooo
-        Hvvvv = hbar.Hvvvv
-        Hvovv = hbar.Hvovv
-        Hooov = hbar.Hooov
+        X1 = self.X1[X]
+        Y2 = self.X2[Y]
 
-        Goo = contract('mjab,ijab->mi', t2, l2)
-        Gvv = -1.0 * contract('ijeb,ijab->ae', t2, l2)
+        tmp = contract('mnef,inef->mi', L[o,o,v,v], Y2)
+        tmp_ov = -1.0*contract('mi,ma->ia', tmp, X1)
 
-        r_l2 = L[o,o,v,v].copy()
-        r_l2 += 0.5 * contract('mnab,ijmn->ijab', l2, .Hoooo)
-        r_l2 += 0.5 * contract('ijef,efab->ijab', l2, .Hvvvv)
-        r_l2 += contract('ae,ijeb->ijab', Gvv, L[o,o,v,v])
-        r_l2 -= contract('mi,mjab->ijab', Goo, L[o,o,v,v])
-        r_l2 += 2.0 * contract('ie,ejab->ijab', l1, 2.0*Hvovv-Hvovv.swapaxes(2,3))
-        r_l2 -= 2.0 * contract('mb,jima->ijab', l1, 2.0*Hooov-Hooov.swapaxes(0,1))
+        tmp = contract('mnef,mnaf->ae', L[o,o,v,v], Y2)
+        tmp_ov -= contract('ae,ie->ia', tmp, X1)
 
-        r_l2 = r_l2 + r_l2.swapaxes(0,1).swapaxes(2,3)
+        tmp = contract('mnef,me->nf', L[o,o,v,v], X1)
+        tmp_ov += contract('nf,nifa->ia', tmp, (2*Y2-Y2.swapaxes(2,3)))
+
+        polar = contract('ia,ia->', tmp_ov, l1)
+
+        return polar
+
+        
+
+class pertbar(object):
+    def __init__(self, pert, ccwfn):
+        o = ccwfn.o
+        v = ccwfn.v
+        t1 = ccwfn.t1
+        t2 = ccwfn.t2
+        contract = ccwfn.contract
+
+        self.Aov = pert[o,v].copy()
+
+        self.Aoo = pert[o,o].copy()
+        self.Aoo += contract('ie,me->mi', t1, pert[o,v])
+
+        self.Avv = pert[v,v].copy()
+        self.Avv -= contract('ma,me->ae', t1, pert[o,v])
+
+        self.Avo = pert[v,o].copy()
+        self.Avo += contract('ie,ae->ai', t1, pert[v,v])
+        self.Avo -= contract('ma,mi->ai', t1, pert[o,o])
+        self.Avo += contract('miea,me->ai', (2.0*t2 - t2.swapaxes(2,3)), pert[o,v])
+        self.Avo -= contract('ie,ma,me->ai', t1, t1, pert[o,v])
+
+        self.Aovoo = contract('ijeb,me->mbij', t2, pert[o,v])
+
+        self.Avvvo = -1.0*contract('miab,me->abei', t2, pert[o,v])
+
+        # Note that Avvoo is permutationally symmetric, unlike the implementation in ugacc
+        self.Avvoo = contract('ijeb,ae->ijab', t2, self.Avv)
+        self.Avvoo -= contract('mjab,mi->ijab', t2, self.Aoo)
+        self.Avvoo = 0.5*(self.Avvoo + self.Avvoo.swapaxes(0,1).swapaxes(2,3))
 
