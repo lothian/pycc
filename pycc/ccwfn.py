@@ -118,6 +118,10 @@ class ccwfn(object):
             raise Exception("%s is not an allowed local filter." % (filter))
         self.filter = filter
 
+        # Default DIIS params, but overriden by solve_cc function.  Used by Local._MP2_loop()
+        self.max_diis = kwargs.pop('max_diis', 8)
+        self.start_diis = kwargs.pop('start_diis', 1)
+
         self.ref = scf_wfn
         self.eref = self.ref.energy()
         self.nfzc = self.ref.frzcpi()[0]                # assumes symmetry c1
@@ -154,7 +158,9 @@ class ccwfn(object):
         self.H = Hamiltonian(self.ref, self.C, self.C, self.C, self.C)
 
         if local is not None:
-            self.Local = Local(local, self.C, self.nfzc, self.no, self.nv, self.H, self.local_cutoff,self.it2_opt)
+            print("max_diis in ccwfn:", self.max_diis)
+            self.Local = Local(local, self.C, self.nfzc, self.no, self.nv, self.H, self.local_cutoff,self.it2_opt,
+            self.max_diis, self.start_diis)
             if filter is not True:
                 self.Local.trans_integrals(self.o, self.v)
                 self.Local.overlaps(self.Local.QL)

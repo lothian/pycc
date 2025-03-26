@@ -2,6 +2,7 @@ import psi4
 import numpy as np
 from opt_einsum import contract
 import time
+from .utils import helper_diis
 
 class Local(object):
     """
@@ -59,7 +60,7 @@ class Local(object):
      to run local MP2, uncomment the necessary lines within the _build_"local" functions which are at the end 
     """
 
-    def __init__(self, local, C, nfzc, no, nv, H, cutoff, it2_opt,
+    def __init__(self, local, C, nfzc, no, nv, H, cutoff, it2_opt, max_diis, start_diis,
             core_cut=5E-2,
             lindep_cut=1E-6,
             e_conv=1e-12,
@@ -77,6 +78,10 @@ class Local(object):
         self.lindep_cut = lindep_cut
         self.e_conv = e_conv
         self.r_conv = r_conv
+        self.max_diis = max_diis
+        self.start_diis = start_diis
+
+        print("max_diis in Local:", self.max_diis)
 
         self._build()
     
@@ -618,6 +623,13 @@ class Local(object):
         rmsd = 0.0
         niter = 0
 
+        # Only for DIIS
+        t1 = np.zeros((self.no,self.nv))
+
+        print("max_diis = ", self.max_diis)
+
+        diis = helper_diis(t1, t2, self.max_diis)
+
         while ((abs(ediff) > self.e_conv) or (abs(rmsd) > self.r_conv)) and (niter <= maxiter):
             niter += 1
             elast = emp2
@@ -634,6 +646,11 @@ class Local(object):
             ediff = emp2 - elast
 
             print("MP2 Iter %3d: MP2 Ecorr = %.15f  dE = % .5E  rmsd = % .5E" % (niter, emp2, ediff, rmsd))        
+
+            diis.add_error_vector(t1, t2)
+            if niter >= self.start_diis:
+                t1_null, t2 = diis.extrapolate(t1, t2)
+
 
     def _sim_MP2_loop(self):
         print("Now doing a comparison against simulation code")
