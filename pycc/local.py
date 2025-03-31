@@ -81,8 +81,6 @@ class Local(object):
         self.max_diis = max_diis
         self.start_diis = start_diis
 
-        print("max_diis in Local:", self.max_diis)
-
         self._build()
     
     def _build(self):
@@ -588,11 +586,11 @@ class Local(object):
         print("T2 full: %d" % (T2_full))
         print("T2 Ratio: %3.12f" % (T2_local/T2_full))
         return Q, L, eps, dim
-        
+
     def _MP2_loop(self,t2,F,ERI,L,Dijab):
         '''
         Perform the MP2 loop by minimization of the Hylleraas functional
-    
+
         Parameters
         ----------
         t2: numpy array
@@ -601,7 +599,7 @@ class Local(object):
             two-electron repulsion integrals
         L: numpy array
             2*ERI - 2*ERI.swapaxes(2,3)
-        Dijab: numpy array 
+        Dijab: numpy array
             Fock matrix eigenvalue denominator
 
         Notes
@@ -617,7 +615,7 @@ class Local(object):
         v = slice(self.no, self.no+self.nv)
         emp2 = contract('ijab,ijab->', t2, L[o,o,v,v])
         print("MP2 Iter %3d: MP2 Ecorr = %.15f  dE = % .5E" % (0, emp2, -emp2))
-        
+
         maxiter = 200
         ediff = emp2
         rmsd = 0.0
@@ -637,7 +635,7 @@ class Local(object):
             r2 += contract('ijae,be->ijab', t2, F[v,v])
             r2 -= contract('imab,mj->ijab', t2, F[o,o])
             r2 = r2 + r2.swapaxes(0,1).swapaxes(2,3)
-            
+
             t2 += r2/Dijab
 
             rmsd = np.sqrt(contract('ijab,ijab->', r2/Dijab, r2/Dijab))
@@ -645,7 +643,7 @@ class Local(object):
             emp2 = contract('ijab,ijab->', t2, L[o,o,v,v])
             ediff = emp2 - elast
 
-            print("MP2 Iter %3d: MP2 Ecorr = %.15f  dE = % .5E  rmsd = % .5E" % (niter, emp2, ediff, rmsd))        
+            print("MP2 Iter %3d: MP2 Ecorr = %.15f  dE = % .5E  rmsd = % .5E" % (niter, emp2, ediff, rmsd))
 
             diis.add_error_vector(t1, t2)
             if niter >= self.start_diis:
@@ -658,7 +656,7 @@ class Local(object):
         L = self.L
         o = slice(0,self.no)
         v = slice(self.no, self.no + self.nv)
-        
+
         # localized fock occupied matrix 
         F_occ = self.H.F[o,o]
 
@@ -669,15 +667,15 @@ class Local(object):
 
         # initial guess amplitudes
         t2 = self.H.ERI[o,o,v,v]/Dijab
-        
+
         for ij in range(self.no*self.no):
             i = ij // self.no
             j = ij % self.no
 
             t2_ij = L[ij].T @ Q[ij].T @ t2[i,j] @ Q[ij] @ L[ij]
-            t2_ij /= -1*(self.eps[ij].reshape(-1,1) + self.eps[ij].reshape(1,-1) - self.H.F[i,i] - self.H.F[j,j])       
+            t2_ij /= -1*(self.eps[ij].reshape(-1,1) + self.eps[ij].reshape(1,-1) - self.H.F[i,i] - self.H.F[j,j])
             t2[i,j] = Q[ij] @ L[ij] @ t2_ij @ L[ij].T @ Q[ij].T
-       
+
         t2_ij = 0
      
         emp2 = contract('ijab,ijab->', t2, self.H.L[o,o,v,v])

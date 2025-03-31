@@ -158,7 +158,6 @@ class ccwfn(object):
         self.H = Hamiltonian(self.ref, self.C, self.C, self.C, self.C)
 
         if local is not None:
-            print("max_diis in ccwfn:", self.max_diis)
             self.Local = Local(local, self.C, self.nfzc, self.no, self.nv, self.H, self.local_cutoff,self.it2_opt,
             self.max_diis, self.start_diis)
             if filter is not True:
